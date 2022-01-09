@@ -1,0 +1,16 @@
+apikey = 769e84dd57msh3d3b701bd3c0691p177eecjsn0ee78d73f801
+httpsprotocol_prestring = https://community-open-weather-map.p.rapidapi.com
+###
+
+
+GET https://community-open-weather-map.p.rapidapi.com/weather?q=London%2Cuk&lat=0&lon=0&callback=test&id=2172797&lang=null&units=imperial&mode=xml HTTP/1.1
+X-Rapidapi-Host: community-open-weather-map.p.rapidapi.com
+X-Rapidapi-Key: 769e84dd57msh3d3b701bd3c0691p177eecjsn0ee78d73f801
+Host: community-open-weather-map.p.rapidapi.com
+
+###
+
+GET https://community-open-weather-map.p.rapidapi.com/forecast?q=san%20francisco%2Cus HTTP/1.1
+X-Rapidapi-Host: community-open-weather-map.p.rapidapi.com
+X-Rapidapi-Key: 769e84dd57msh3d3b701bd3c0691p177eecjsn0ee78d73f801
+Host: community-open-weather-map.p.rapidapi.com
