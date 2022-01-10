@@ -1,9 +1,12 @@
 import datetime as dt
 import json
+from typing_extensions import final
 import bs4
 import requests
 import dataclasses as dc
 import urllib
+import collections as col
+import UI_funcs as UI
 
 # -------------------------------------------
 # Modify the holiday class to 
@@ -38,8 +41,9 @@ class HolidayList:
         return response.text
    
     def addHoliday(self,holidayObj):
-        holtype = type(holidayObj)
-        if holtype == Holiday:
+        print(type(holidayObj))
+        print(isinstance(holidayObj,Holiday))
+        if isinstance(holidayObj,Holiday):
             self.innerHolidays.append(holidayObj)
             print(f'{holidayObj} was added')
         
@@ -48,21 +52,26 @@ class HolidayList:
 
     def findHoliday(self,HolidayName, Date):
         holidaylist = self.innerHolidays
-        for count,obj in enumerate(holidaylist):
+        foundlist = []
+        for obj in holidaylist:
             if obj.name == HolidayName and obj.date == Date:
                 return obj
-            else:
-                return None
-
-    def removeHoliday(self,HolidayName, Date):
-        holiday = self.findHoliday(HolidayName,Date)
-        try:
-            self.innerHolidays.remove(holiday)
-            print(f'{holiday} has been removed from the holiday list.')
-        except:
-            print('Delete later: in removeHoliday')
-            print('An exception occurred. See above message.')
-
+        
+    def removeHoliday(self,HolidayName):
+        holidaylist = self.innerHolidays
+        print(HolidayName)
+        count = 0
+        for hol in holidaylist:
+            if str(hol.name) == HolidayName:
+                print('found')
+                self.innerHolidays.remove(hol)
+                count += 1
+        if count == 0:
+            inlist = False
+        else:
+            inlist = True
+        return inlist
+                
     def read_json(self,filelocation):
         with open(filelocation) as json_file:
             json_data = json.load(json_file)
@@ -84,7 +93,7 @@ class HolidayList:
             obj_dict = {}
             # make name of object and date of object into pieces of dictionary
             obj_dict['name'] = obj.name
-            obj_dict['date'] = obj.date
+            obj_dict['date'] = str(obj.date)
             save_dictlist.append(obj_dict)
         # put into wrapper dict to format like initial json file
         finaldict = {}
@@ -170,52 +179,283 @@ class HolidayList:
         holidays = list(holidays)
         return holidays
 
-
     def displayHolidaysInWeek(self,year,week_number):
         # count through week and print each holiday object
+        # want_weather will only be true if in current week and they ask for it
         filteredlist = self.filter_holidays_by_week(year,week_number)
-        print(f'List of holidays for week {week_number} of year {year}: ')
-        if len(filteredlist) == 0:
+        print(f'These are the holidays for {year} week #{week_number}')
+        if len(filteredlist) != 0:
+            for hol in filteredlist:
+                print(hol)
+        else:
             print(f'No holidays for week {week_number} of year {year}.')
-        for hol in filteredlist:
-            print(hol)
+            
+    def getWeather(self,next_holidays,cityname,country_abbr):
+        # the way the api works
+        # if this function is being called, it must be called for the current date for api compatibility
+        # put name of city where weather is desired, all lowercase, leave spaces
+        hoststr = 'community-open-weather-map.p.rapidapi.com'
+        keystr = '769e84dd57msh3d3b701bd3c0691p177eecjsn0ee78d73f801'
+        url = 'https://community-open-weather-map.p.rapidapi.com/forecast/daily'
+        placequery = f'{cityname},{country_abbr}'
+        querystring = {'q':placequery}
+        headers = {'x-rapidapi-host':hoststr,'x-rapidapi-key':keystr}
+        response = requests.request("GET",url,headers=headers,params=querystring)
+        
+        try:
+            weatherjson = json.loads(response.text)
+            print(weatherjson)
+        except:
+            print(f'Something went wrong requesting from the API. Status Code: {response.status_code}')
+            return None
 
-    def getWeather(self,weekNum):
-    #     # Convert weekNum to range between two days
-    #     # Use Try / Except to catch problems
-    #     # Query API for weather in that week range
-    #     # Format weather information and return weather string.
+        # now count through weather data to get list of dates and list of weather
+        # two lists instead of a dictionary, easier indexing
+        weatherlist = []
+        datelist = []
+        # calculated reference date for the api
+        refdate = dt.date(1970,1,1)
+        # get all days of next 7 and their weather
+        for day in weatherjson['list']:
+            datelist.append((refdate + dt.timedelta(seconds=day['dt'])).day+1)
+            weatherlist.append(day['weather'][0]['main'])
+        print(datelist)
+        print(weatherlist)
+        
+        # now count through the holiday objects and return only the weather for those days
+        # make weather strings for the matching holidays
+        finalweathers = []
+        for holiday in next_holidays:
+            daynum = holiday.date.day
+            index = datelist.index(daynum)
+            print(index)
+            finalweathers.append(weatherlist[index])
 
-    # def viewCurrentWeek():
-    #     # Use the Datetime Module to look up current week and year
-    #     # Use your filter_holidays_by_week function to get the list of holidays 
-    #     # for the current week/year
-    #     # Use your displayHolidaysInWeek function to display the holidays in the week
-    #     # Ask user if they want to get the weather
-    #     # If yes, use your getWeather function and display results
+        return finalweathers
+            
+
+        # Convert weekNum to range between two days
+        # Use Try / Except to catch problems
+        # Query API for weather in that week range
+        # Format weather information and return weather string.
+
+    def viewCurrentWeek(self):
+        want_weather = False
+        # hardcoded location for simplicity
+        cityname = 'philadelphia'
+        country_abbr = 'us'
+        while want_weather != 'y' and want_weather != 'n':
+            want_weather = input('Would you like to see this week\'s weather? [y/n]: ')
+
+        # find what the holidays are for next 7 days
+        nextweek = dt.date.today() + dt.timedelta(days=7)
+        filterfunc = lambda x: x.date >= dt.date.today() and x.date <= nextweek
+        next_holidays = list(filter(filterfunc,self.innerHolidays))
+        
+        if want_weather == 'y':
+            # if they want the weather, display the holidays for the next 7 days
+            next_weather = self.getWeather(next_holidays,cityname,country_abbr)
+
+            for i in range(len(next_holidays)):
+                print(f'{next_holidays[i]} - {next_weather[i]}')
+
+        else:
+            for i in range(len(next_holidays)):
+                print(next_holidays[i])
+        # # Use the Datetime Module to look up current week and year
+        # Use your filter_holidays_by_week function to get the list of holidays 
+        # for the current week/year
+        # Use your displayHolidaysInWeek function to display the holidays in the week
+        # Ask user if they want to get the weather
+        # If yes, use your getWeather function and display results
 
 
-
-# def main():
-#     # Large Pseudo Code steps
-#     # -------------------------------------
-#     # 1. Initialize HolidayList Object
-#     # 2. Load JSON file via HolidayList read_json function
-#     # 3. Scrape additional holidays using your HolidayList scrapeHolidays function.
-#     # 3. Create while loop for user to keep adding or working with the Calender
-#     # 4. Display User Menu (Print the menu)
-#     # 5. Take user input for their action based on Menu and check the user input for errors
-#     # 6. Run appropriate method from the HolidayList object depending on what the user input is
-#     # 7. Ask the User if they would like to Continue, if not, end the while loop, ending the program.  If they do wish to continue, keep the program going. 
-
-
-if __name__ == "__main__":
-    filespot = 'holidays.json'
-    writefile = 'test_write.json'
+def start_up():
+    filelocation = 'holidays.json'
+    print('Holiday Management')
+    print('===================')
     holList = HolidayList()
+    holList.read_json(filelocation)
     holList.scrapeHolidays()
-    holList.displayHolidaysInWeek(2022,1)
+    print(f'There are {len(holList.innerHolidays)} holidays stored in the system.')
+    place = 0
+    return place,holList
+
+def get_place():
+    place = 0
+    while place not in [1,2,3,4,5]:
+        place = input('Navigate: ')
+        try:
+            place = int(place)
+        except:
+            print('Must enter an integer.')
+    return place
+
+def main_menu():
+    print('Holiday Menu')
+    print('==============')
+    print('1. Add Holiday')
+    print('2. Remove a Holiday')
+    print('3. Save Holiday List')
+    print('4. View Holidays')
+    print('5. Exit')
+    place = get_place()
+    return place
+
+def add(holList):
+    print('Add a Holiday')
+    print('===============')
+    name = input('Holiday: ')
+    date = input('Date (YYYY-MM-DD): ')
+    datevalid = False
+    while not datevalid:
+        try:
+            date = holList.convertDatefromJSON(date)
+            print(name,date)
+            holiday = Holiday(name,date)
+            print(type(holiday))
+            holList.addHoliday(holiday)
+            print('Success: ')
+            print(f'{holiday} has been added to the holiday list.')
+            datevalid = True
+            place = 0
+        except:
+            print('Error: ')
+            print('Invalid date. Please try again.')
+            date = input(f'Date for {name}: ')
+    place = 0
+    saved = False
+    return place,saved
+
+def remove(holList):
+    print('Remove a Holiday')
+    print('==================')
+    name = input('Holiday Name: ')
+    namevalid = holList.removeHoliday(name)
+    print(name)
+    while not namevalid:
+        print('Error: ')
+        print(f'{name} not found.')
+        print()
+        name = input('Holiday Name: ')
+        namevalid = holList.removeHoliday(name)
+    print('Success: ')
+    print(f'{name} has been removed from the holiday list.')
+    place = 0
+    saved = False
+    return place,saved
+
+def save(holList,saved):
+    print('Saving Holiday List')
+    print('====================')
+    want_save = input('Are you sure you want to save your changes? [y/n]: ')
+    savename = 'HolidayList.json'
+    while want_save != 'y' and want_save != 'n':
+        print('Please enter y (yes) or n (no).')
+        want_save = input('Are you sure you want to save your changes? [y/n]: ')
+
+    if want_save == 'y':
+        holList.save_to_json(savename)
+        print('Success: ')
+        print('Your changes have been saved.')
+        saved = True
     
+    else:
+        print('Canceled: ')
+        print('Holiday list file save canceled.')
+        place = 0
+    place = 0
+    return place,saved
+
+def view(holList):
+    print('View Holidays')
+    print('==============')
+    year = input('Which year?: ')
+    while len(year) != 4 or not year.isnumeric():
+        year = input('Please enter a 4 digit integer. Year: ')
+    
+    
+    weekvalid = False
+    while not weekvalid:
+        weeknum = input('Which week? #[1-52, Leave blank for the current week]: ')
+        if weeknum.isnumeric() and int(weeknum)>=1 and int(weeknum)<=52:
+            year = int(year)
+            weeknum = int(weeknum)
+            holList.displayHolidaysInWeek(year,weeknum)
+            weekvalid = True
+
+        elif weeknum == '':
+            holList.viewCurrentWeek()
+            weekvalid = True
+    
+        else:
+            print('Error. Invalid entry. Enter an integer between 1 and 52.')
+            weeknum = input('Which week? #[1-52, Leave blank for the current week]: ')
+    place = 0
+    return place
+
+def exit(saved):
+    print('Exit')
+    print('=====')
+    done = None
+    if saved:
+        while done != 'y' and done != 'n':
+            done = input('Are you sure you want to exit? [y/n] ')
+        if done == 'y':
+            print('Goodbye!')
+            place = None
+        else:
+            place = 0
+    
+    else:
+        while done != 'y' and done != 'n':
+            print('Your changes will be lost.')
+            done = input('Are you sure you want to exit? [y/n] ')
+        if done == 'y':
+            print('Goodbye!')
+            place = None
+        else:
+            place = 0
+
+    return place
+
+def main():
+    place,holList = start_up()
+    saved = False
+    while place != None:
+        if place == 0:
+            place = main_menu()
+        
+        elif place == 1:
+            place,saved = add(holList)
+
+        elif place == 2:
+            place,saved = remove(holList)
+
+        elif place == 3:
+            place,saved = save(holList,saved)
+        
+        elif place == 4:
+            place = view(holList)
+        
+        elif place == 5:
+            place = exit(saved)
+        
+        else:
+            place = 0
+
+
+if __name__ == '__main__':
+    # hol = Holiday('Good Stuff Day',dt.date(2020,11,11))
+    # holList = HolidayList()
+    # filename = 'holidays.json'
+    # holList.read_json(filename)
+    # holList.addHoliday(hol)
+    # holList.removeHoliday('Good Stuff Day')
+    # print(holList.innerHolidays)
+    main()
+    hol1 = Holiday('name1',dt.date(1900,1,1))
+    print(isinstance(hol1,Holiday))
 
 # Additional Hints:
 # ---------------------------------------------
