@@ -1,12 +1,9 @@
 import datetime as dt
 import json
-from typing_extensions import final
 import bs4
 import requests
 import dataclasses as dc
-import urllib
-import collections as col
-import UI_funcs as UI
+
 
 # -------------------------------------------
 # Modify the holiday class to 
@@ -41,8 +38,6 @@ class HolidayList:
         return response.text
    
     def addHoliday(self,holidayObj):
-        print(type(holidayObj))
-        print(isinstance(holidayObj,Holiday))
         if isinstance(holidayObj,Holiday):
             self.innerHolidays.append(holidayObj)
             print(f'{holidayObj} was added')
@@ -52,18 +47,15 @@ class HolidayList:
 
     def findHoliday(self,HolidayName, Date):
         holidaylist = self.innerHolidays
-        foundlist = []
         for obj in holidaylist:
             if obj.name == HolidayName and obj.date == Date:
                 return obj
         
     def removeHoliday(self,HolidayName):
         holidaylist = self.innerHolidays
-        print(HolidayName)
         count = 0
         for hol in holidaylist:
             if str(hol.name) == HolidayName:
-                print('found')
                 self.innerHolidays.remove(hol)
                 count += 1
         if count == 0:
@@ -98,7 +90,6 @@ class HolidayList:
         # put into wrapper dict to format like initial json file
         finaldict = {}
         finaldict['holidays'] = save_dictlist
-        print(finaldict)
         with open(filelocation,'w',encoding='utf-8') as f:
             json.dump(finaldict,f)
 
@@ -145,15 +136,11 @@ class HolidayList:
             for row in table.find_all_next('tr'):
                 datehtml = row.find_next('td')
                 namehtml = datehtml.find_next('td')
-                if year == 2020:
-                    print(datehtml)
-                    print(namehtml)
                 if datehtml == None or namehtml == None:
                     break
                 name = namehtml.string
                 date = datehtml.string
                 # convert date
-                print('Converting Date')
                 date = self.convertDatefromCalendar(date,year)
                 # now need to check if holiday is currently in holiday list
                 holiday_inlist = self.findHoliday(name,date)
@@ -204,7 +191,6 @@ class HolidayList:
         
         try:
             weatherjson = json.loads(response.text)
-            print(weatherjson)
         except:
             print(f'Something went wrong requesting from the API. Status Code: {response.status_code}')
             return None
@@ -219,8 +205,6 @@ class HolidayList:
         for day in weatherjson['list']:
             datelist.append((refdate + dt.timedelta(seconds=day['dt'])).day+1)
             weatherlist.append(day['weather'][0]['main'])
-        print(datelist)
-        print(weatherlist)
         
         # now count through the holiday objects and return only the weather for those days
         # make weather strings for the matching holidays
@@ -228,7 +212,6 @@ class HolidayList:
         for holiday in next_holidays:
             daynum = holiday.date.day
             index = datelist.index(daynum)
-            print(index)
             finalweathers.append(weatherlist[index])
 
         return finalweathers
@@ -269,7 +252,6 @@ class HolidayList:
         # Ask user if they want to get the weather
         # If yes, use your getWeather function and display results
 
-
 def start_up():
     filelocation = 'holidays.json'
     print('Holiday Management')
@@ -277,7 +259,7 @@ def start_up():
     holList = HolidayList()
     holList.read_json(filelocation)
     holList.scrapeHolidays()
-    print(f'There are {len(holList.innerHolidays)} holidays stored in the system.')
+    holList.numHolidays()
     place = 0
     return place,holList
 
@@ -311,9 +293,7 @@ def add(holList):
     while not datevalid:
         try:
             date = holList.convertDatefromJSON(date)
-            print(name,date)
             holiday = Holiday(name,date)
-            print(type(holiday))
             holList.addHoliday(holiday)
             print('Success: ')
             print(f'{holiday} has been added to the holiday list.')
@@ -332,7 +312,6 @@ def remove(holList):
     print('==================')
     name = input('Holiday Name: ')
     namevalid = holList.removeHoliday(name)
-    print(name)
     while not namevalid:
         print('Error: ')
         print(f'{name} not found.')
@@ -373,7 +352,6 @@ def view(holList):
     year = input('Which year?: ')
     while len(year) != 4 or not year.isnumeric():
         year = input('Please enter a 4 digit integer. Year: ')
-    
     
     weekvalid = False
     while not weekvalid:
@@ -446,16 +424,7 @@ def main():
 
 
 if __name__ == '__main__':
-    # hol = Holiday('Good Stuff Day',dt.date(2020,11,11))
-    # holList = HolidayList()
-    # filename = 'holidays.json'
-    # holList.read_json(filename)
-    # holList.addHoliday(hol)
-    # holList.removeHoliday('Good Stuff Day')
-    # print(holList.innerHolidays)
     main()
-    hol1 = Holiday('name1',dt.date(1900,1,1))
-    print(isinstance(hol1,Holiday))
 
 # Additional Hints:
 # ---------------------------------------------
